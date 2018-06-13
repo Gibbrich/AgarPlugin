@@ -25,12 +25,30 @@ namespace AgarPlugin
         public AgarPluginManager(PluginLoadData pluginLoadData) : base(pluginLoadData)
         {
             ClientManager.ClientConnected += ClientConnected;
+            ClientManager.ClientDisconnected += ClientDisconnected;
+        }
+
+        private void ClientDisconnected(object sender, ClientDisconnectedEventArgs e)
+        {
+            players.Remove(e.Client);
+
+            using (var writer = DarkRiftWriter.Create())
+            {
+                writer.Write(e.Client.ID);
+
+                using (var message = Message.Create(Tags.DESPAWN_PLAYER, writer))
+                {
+                    ClientManager
+                        .GetAllClients()
+                        .ForEach(client => client.SendMessage(message, SendMode.Reliable));
+                }
+            }
         }
 
         private void ClientConnected(object sender, ClientConnectedEventArgs e)
         {
             var newPlayer = CreatePlayer(e);
-            NotifyPlayersNewPlayerConnected(e, newPlayer);
+            NotifyExistingPlayersNewPlayerConnected(e, newPlayer);
             players.Add(e.Client, newPlayer);
             SendDataAboutExistingPlayersToNewPlayer(e);
 
@@ -59,7 +77,7 @@ namespace AgarPlugin
             }
         }
 
-        private void NotifyPlayersNewPlayerConnected(ClientConnectedEventArgs e, Player newPlayer)
+        private void NotifyExistingPlayersNewPlayerConnected(ClientConnectedEventArgs e, Player newPlayer)
         {
             using (var newPlayerWriter = DarkRiftWriter.Create())
             {
@@ -109,6 +127,7 @@ namespace AgarPlugin
                 {
                     var newX = reader.ReadSingle();
                     var newY = reader.ReadSingle();
+                    
                     var player = players[e.Client];
                     player.X = newX;
                     player.Y = newY;
